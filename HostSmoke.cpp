@@ -25,12 +25,12 @@ int main(int argc, char **argv)
         if (!instance)
             throw std::runtime_error(error.toStdString());
         check(instance->acceptsMidi(), "No MIDI input");
-        check(instance->getLatencySamples() == 512, "Host latency not reported");
         for (double rate : {44100., 48000., 88200., 96000.})
             for (int block : {32, 64, 128, 256, 512, 1024, 2048})
             {
                 instance->setRateAndBufferSizeDetails(rate, block);
                 instance->prepareToPlay(rate, block);
+                check(instance->getLatencySamples() == 512, "Host latency not reported");
                 juce::AudioBuffer<float> buffer(2, block);
                 juce::MidiBuffer midi;
                 double energy = 0;
