@@ -1,0 +1,58 @@
+name: Build Mac M1 VST3
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - name: Download your repository
+        uses: actions/checkout@v4
+      - name: Check Apple Silicon runner
+        run: |
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          cmake --version
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build instrument and tests
+        run: cmake --build build --config Release --parallel 3
+      - name: Run DSP and state tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Verify and load the real VST3
+        run: |
+          VST_PATH="$GITHUB_WORKSPACE/build/NeuroJ_artefacts/Release/VST3/NEUROJ.vst3"
+          test -d "$VST_PATH"
+          codesign --force --deep --sign - "$VST_PATH"
+          codesign --verify --deep --strict "$VST_PATH"
+          lipo -verify_arch arm64 "$VST_PATH/Contents/MacOS/NEUROJ"
+          ./build/neuroj_host_smoke_artefacts/Release/neuroj_host_smoke "$VST_PATH"
+      - name: Package VST3 and preview audio
+        run: |
+          mkdir -p dist/NEUROJ-Mac-M1
+          ditto build/NeuroJ_artefacts/Release/VST3/NEUROJ.vst3 dist/NEUROJ-Mac-M1/NEUROJ.vst3
+          cp INSTALL-MAC.md dist/NEUROJ-Mac-M1/
+          cp LICENSE THIRD-PARTY-NOTICES.md dist/NEUROJ-Mac-M1/
+          cp build/_deps/juce-src/LICENSE.md dist/NEUROJ-Mac-M1/JUCE-LICENSE.md
+          git archive --format=zip --output=dist/NEUROJ-Mac-M1/Project-source.zip HEAD
+          tar -czf dist/NEUROJ-Mac-M1/JUCE-8.0.6-source.tar.gz -C build/_deps juce-src
+          ./build/neuroj_core_tests --render dist/NEUROJ-Mac-M1/Audio-preview.wav
+          ditto -c -k --sequesterRsrc --keepParent dist/NEUROJ-Mac-M1 dist/NEUROJ-Mac-M1.zip
+      - name: Upload your downloadable plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEUROJ-Mac-M1-VST3
+          path: dist/NEUROJ-Mac-M1.zip
+          if-no-files-found: error
+          retention-days: 30
+
