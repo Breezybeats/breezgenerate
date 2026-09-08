@@ -35,7 +35,7 @@ jobs:
           test -d "$VST_PATH"
           codesign --force --deep --sign - "$VST_PATH"
           codesign --verify --deep --strict "$VST_PATH"
-          lipo -verify_arch arm64 "$VST_PATH/Contents/MacOS/NEUROJ"
+          lipo "$VST_PATH/Contents/MacOS/NEUROJ" -verify_arch arm64
           ./build/neuroj_host_smoke_artefacts/Release/neuroj_host_smoke "$VST_PATH"
       - name: Package VST3 and preview audio
         run: |
